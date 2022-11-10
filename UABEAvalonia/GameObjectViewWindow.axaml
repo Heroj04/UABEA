@@ -13,6 +13,7 @@
       <RowDefinition Height="26" />
       <RowDefinition Height="*" />
       <RowDefinition Height="26" />
+      <RowDefinition Height="26" />
     </Grid.RowDefinitions>
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*" />
@@ -49,6 +50,13 @@
       </Grid.ColumnDefinitions>
       <Button Grid.Column="0" Content="Expand Selection" Name="btnExpand" />
       <Button Grid.Column="1" Content="Collapse Selection" Name="btnCollapse" />
+    </Grid>
+
+    <Grid Grid.Row="3" Grid.Column="0" HorizontalAlignment="Left">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="120" />
+      </Grid.ColumnDefinitions>
+      <Button Grid.Column="0" Content="Export Tree" Name="btnExport" />
     </Grid>
   </Grid>
 </Window>

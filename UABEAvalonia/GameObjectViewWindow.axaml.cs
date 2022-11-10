@@ -18,6 +18,7 @@ namespace UABEAvalonia
         private ComboBox cbxFiles;
         private Button btnExpand;
         private Button btnCollapse;
+        private Button btnExport;
 
         private InfoWindow win;
         private AssetWorkspace workspace;
@@ -37,12 +38,14 @@ namespace UABEAvalonia
             cbxFiles = this.FindControl<ComboBox>("cbxFiles");
             btnExpand = this.FindControl<Button>("btnExpand");
             btnCollapse = this.FindControl<Button>("btnCollapse");
+            btnExport = this.FindControl<Button>("btnExport");
             //generated events
             gameObjectTreeView.SelectionChanged += GameObjectTreeView_SelectionChanged;
             menuVisitAsset.Click += MenuVisitAsset_Click;
             cbxFiles.SelectionChanged += CbxFiles_SelectionChanged;
             btnExpand.Click += BtnExpand_Click;
             btnCollapse.Click += BtnCollapse_Click;
+            btnExport.Click += BtnExport_Click;
         }
 
         public GameObjectViewWindow(InfoWindow win, AssetWorkspace workspace) : this()
@@ -120,6 +123,77 @@ namespace UABEAvalonia
             if (componentTreeView.SelectedItem != null && componentTreeView.SelectedItem is TreeViewItem treeItem)
             {
                 componentTreeView.CollapseAllChildren(treeItem);
+            }
+        }
+
+        private async void BtnExport_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            object? selectedItemObj = gameObjectTreeView.SelectedItem;
+            if (selectedItemObj == null)
+                return;
+
+            TreeViewItem selectedItem = (TreeViewItem)selectedItemObj;
+            if (selectedItem.Tag == null)
+                return;
+
+            AssetContainer gameObjectCont = (AssetContainer)selectedItem.Tag;
+            AssetTypeValueField gameObjectBf = workspace.GetBaseField(gameObjectCont);
+
+            OpenFolderDialog ofd = new OpenFolderDialog();
+            ofd.Title = "Select export directory";
+
+            string dir = await ofd.ShowAsync(this);
+
+            if (dir != null && dir != string.Empty)
+            {
+                SelectDumpWindow selectDumpWindow = new SelectDumpWindow(true);
+                string? extension = await selectDumpWindow.ShowDialog<string?>(this);
+
+                if (extension == null)
+                    return;
+                
+                await exportTree(selectedItem, dir, extension);
+                MessageBoxUtil.ShowDialog(win, "Export", "Exported " + gameObjectBf["m_Name"].AsString);
+            }
+        }
+
+        private async Task exportTree(TreeViewItem tree, string basePath, string extension) {
+            if (tree.Tag == null)
+                return;
+            
+            AssetContainer gameObjectCont = (AssetContainer)tree.Tag;
+            AssetTypeValueField gameObjectBf = workspace.GetBaseField(gameObjectCont);
+            AssetTypeValueField components = gameObjectBf["m_Component"]["Array"];
+            
+            Directory.CreateDirectory(basePath);
+
+            // Export current game objects components
+            foreach (AssetTypeValueField data in components)
+            {
+                AssetTypeValueField component = data["component"];
+                AssetContainer componentCont = workspace.GetAssetContainer(gameObjectCont.FileInstance, component, false);
+                Extensions.GetUABENameFast(workspace, componentCont, false, out string assetName, out string _);
+                assetName = Extensions.ReplaceInvalidPathChars(assetName);
+                string file = Path.Combine(basePath, $"{assetName}-{Path.GetFileName(componentCont.FileInstance.path)}-{componentCont.PathId}.{extension}");
+
+                using (FileStream fs = File.OpenWrite(file))
+                using (StreamWriter sw = new StreamWriter(fs))
+                {
+                    AssetTypeValueField baseField = workspace.GetBaseField(componentCont);
+
+                    AssetImportExport dumper = new AssetImportExport();
+                    if (extension == "json")
+                        dumper.DumpJsonAsset(sw, baseField);
+                    else //if (extension == "txt")
+                        dumper.DumpTextAsset(sw, baseField);
+                }
+            }
+
+            // Export child game objects
+            foreach (TreeViewItem childTree in tree.Items)
+            {
+                string childBasePath = basePath + "\\" + childTree.Header;
+                exportTree(childTree, childBasePath, extension);
             }
         }
 
