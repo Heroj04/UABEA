@@ -17,6 +17,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UABEAvalonia.Plugins;
 
@@ -26,6 +27,7 @@ namespace UABEAvalonia
     {
         //controls
         private MenuItem menuAdd;
+        private MenuItem menuImportDirectory;
         private MenuItem menuSave;
         private MenuItem menuSaveAs;
         private MenuItem menuCreateStandaloneInstaller;
@@ -85,6 +87,7 @@ namespace UABEAvalonia
 #endif
             //generated items
             menuAdd = this.FindControl<MenuItem>("menuAdd")!;
+            menuImportDirectory = this.FindControl<MenuItem>("menuImportDirectory")!;
             menuSave = this.FindControl<MenuItem>("menuSave")!;
             menuSaveAs = this.FindControl<MenuItem>("menuSaveAs")!;
             menuCreateStandaloneInstaller = this.FindControl<MenuItem>("menuCreateStandaloneInstaller")!;
@@ -113,6 +116,7 @@ namespace UABEAvalonia
             //generated events
             KeyDown += InfoWindow_KeyDown;
             menuAdd.Click += MenuAdd_Click;
+            menuImportDirectory.Click += MenuImportDirectory_Click;
             menuSave.Click += MenuSave_Click;
             menuSaveAs.Click += MenuSaveAs_Click;
             menuCreatePackageFile.Click += MenuCreatePackageFile_Click;
@@ -176,6 +180,77 @@ namespace UABEAvalonia
         {
             AddAssetWindow win = new AddAssetWindow(Workspace);
             await win.ShowDialog(this);
+        }
+
+        private async void MenuImportDirectory_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            OpenFolderDialog ofd = new OpenFolderDialog();
+            ofd.Title = "Select import directory";
+
+            string dir = await ofd.ShowAsync(this);
+
+            if (dir != null && dir != string.Empty)
+            {
+                // Get all files in directory
+                IEnumerable<string> files = Directory.EnumerateFiles(dir, "*.json", SearchOption.AllDirectories);
+
+                if (files == null)
+                    return;
+
+                foreach (string filePath in files)
+                {
+                    GroupCollection groups = new Regex(@"([\w ]+)-(\d+)-(-?\d+)-(\d+)-(-?\d+)").Match(Path.GetFileNameWithoutExtension(filePath)).Groups;
+                    if (groups.Count != 6)
+                        continue;
+                    
+                    string name = groups[1].Value;
+                    int fileId = int.Parse(groups[2].Value);
+                    long pathId = long.Parse(groups[3].Value);
+                    int typeId = int.Parse(groups[4].Value);
+                    ushort monoId = ushort.Parse(groups[5].Value);
+
+                    AssetsFileInstance file = Workspace.LoadedFiles[fileId];
+
+                    // Create temporary typevaluetemplate
+                    AssetTypeTemplateField tempField = null;
+                    ClassDatabaseFile cldb = Workspace.am.classDatabase;
+                    ClassDatabaseType cldbType;
+                    
+                    cldbType = AssetHelper.FindAssetClassByID(cldb, typeId);
+                    if (cldbType == null)
+                        return;
+
+                    tempField = new AssetTypeTemplateField();
+                    tempField.FromClassDatabase(cldb, cldbType);
+
+                    using (FileStream fs = File.OpenRead(filePath))
+                    using (StreamReader sr = new StreamReader(fs))
+                    {
+                        AssetImportExport importer = new AssetImportExport();
+
+                        byte[]? bytes;
+                        string? exceptionMessage;
+
+                        if (filePath.EndsWith(".json"))
+                        {
+                            bytes = importer.ImportJsonAsset(tempField, sr, out exceptionMessage);
+                        }
+                        else
+                        {
+                            bytes = importer.ImportTextAsset(sr, out exceptionMessage);
+                        }
+
+                        if (bytes == null)
+                        {
+                            await MessageBoxUtil.ShowDialog(this, "Parse error", "Something went wrong when reading the dump file:\n" + exceptionMessage);
+                            return;
+                        }
+
+                        // Create new Asset in file
+                        Workspace.AddReplacer(file, new AssetsReplacerFromMemory(fileId, pathId, typeId, monoId, bytes), new MemoryStream(bytes));
+                    }
+                }
+            }
         }
 
         private async void MenuSave_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
