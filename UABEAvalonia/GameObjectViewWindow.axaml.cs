@@ -166,27 +166,14 @@ namespace UABEAvalonia
             AssetTypeValueField components = gameObjectBf["m_Component"]["Array"];
             
             Directory.CreateDirectory(basePath);
+            await exportAssetCont(gameObjectCont, basePath, extension);
 
             // Export current game objects components
             foreach (AssetTypeValueField data in components)
             {
                 AssetTypeValueField component = data["component"];
                 AssetContainer componentCont = workspace.GetAssetContainer(gameObjectCont.FileInstance, component, false);
-                Extensions.GetUABENameFast(workspace, componentCont, false, out string assetName, out string _);
-                assetName = Extensions.ReplaceInvalidPathChars(assetName);
-                string file = Path.Combine(basePath, $"{assetName}-{Path.GetFileName(componentCont.FileInstance.path)}-{componentCont.PathId}.{extension}");
-
-                using (FileStream fs = File.OpenWrite(file))
-                using (StreamWriter sw = new StreamWriter(fs))
-                {
-                    AssetTypeValueField baseField = workspace.GetBaseField(componentCont);
-
-                    AssetImportExport dumper = new AssetImportExport();
-                    if (extension == "json")
-                        dumper.DumpJsonAsset(sw, baseField);
-                    else //if (extension == "txt")
-                        dumper.DumpTextAsset(sw, baseField);
-                }
+                await exportAssetCont(componentCont, basePath, extension);
             }
 
             // Export child game objects
@@ -194,6 +181,24 @@ namespace UABEAvalonia
             {
                 string childBasePath = basePath + "\\" + childTree.Header;
                 exportTree(childTree, childBasePath, extension);
+            }
+        }
+
+        private async Task exportAssetCont(AssetContainer asset, string path, string extension) {
+            Extensions.GetUABENameFast(workspace, asset, false, out string assetName, out string _);
+            assetName = Extensions.ReplaceInvalidPathChars(assetName);
+            string file = Path.Combine(path, $"{assetName}-{workspace.LoadedFiles.IndexOf(asset.FileInstance)}-{asset.PathId}-{asset.ClassId}-{asset.MonoId}.{extension}");
+
+            using (FileStream fs = File.OpenWrite(file))
+            using (StreamWriter sw = new StreamWriter(fs))
+            {
+                AssetTypeValueField baseField = workspace.GetBaseField(asset);
+
+                AssetImportExport dumper = new AssetImportExport();
+                if (extension == "json")
+                    dumper.DumpJsonAsset(sw, baseField);
+                else //if (extension == "txt")
+                    dumper.DumpTextAsset(sw, baseField);
             }
         }
 
