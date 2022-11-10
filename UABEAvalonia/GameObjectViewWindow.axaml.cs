@@ -165,22 +165,22 @@ namespace UABEAvalonia
             AssetTypeValueField gameObjectBf = workspace.GetBaseField(gameObjectCont);
             AssetTypeValueField components = gameObjectBf["m_Component"]["Array"];
             
-            Directory.CreateDirectory(basePath);
-            await exportAssetCont(gameObjectCont, basePath, extension);
+            string path = basePath + "\\" + tree.Header;
+            Directory.CreateDirectory(path);
+            await exportAssetCont(gameObjectCont, path, extension);
 
             // Export current game objects components
             foreach (AssetTypeValueField data in components)
             {
                 AssetTypeValueField component = data["component"];
                 AssetContainer componentCont = workspace.GetAssetContainer(gameObjectCont.FileInstance, component, false);
-                await exportAssetCont(componentCont, basePath, extension);
+                await exportAssetCont(componentCont, path, extension);
             }
 
             // Export child game objects
             foreach (TreeViewItem childTree in tree.Items)
             {
-                string childBasePath = basePath + "\\" + childTree.Header;
-                exportTree(childTree, childBasePath, extension);
+                exportTree(childTree, path, extension);
             }
         }
 
